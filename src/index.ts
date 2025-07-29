@@ -23,7 +23,8 @@ export type {
   CryptoCapabilities,
   EncryptedData,
   KeyPair,
-  HashResult
+  HashResult,
+  KeyDerivationResult
 } from './crypto.unit.js';
 
 // Pure function exports for simple use cases
@@ -35,5 +36,8 @@ export {
   generateKeyPair,
   sign,
   verify,
-  randomBytes
-} from './pure-functions.js';
+  randomBytes,
+  deriveKeyPBKDF2,
+  deriveKeyHKDF,
+  deriveKeyScrypt
+} from './functions.js';

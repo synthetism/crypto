@@ -1,17 +1,7 @@
 /**
- * Cryptimport { Unit, type UnitProps, type TeachingContract, createUnitSchema } from '@synet/unit';
-import { Result } from './result.js';
-import { 
-  createHash, 
-  createCipheriv, 
-  createDecipheriv, 
-  generateKeyPairSync, 
-  createSign,
-  createVerify,
-  randomBytes
-} from 'crypto';undational Cryptographic Operations
- * 
- * Following Unit Architecture Doctrine v1.0.5
+ * Foundational Cryptographic Operations
+ *
+ * Following Unit Architecture v1.0.6
  * Doctrine #20: Do one thing well, then teach
  * 
  * ONE THING: Symmetric/Asymmetric encryption + digital signatures using Node.js native crypto
@@ -29,7 +19,10 @@ import {
   generateKeyPairSync, 
   createSign,
   createVerify,
-  randomBytes 
+  randomBytes,
+  pbkdf2Sync,
+  createHmac,
+  scryptSync
 } from 'node:crypto';
 
 // Doctrine #13: TYPE HIERARCHY CONSISTENCY (Config → Props → State → Output)
@@ -65,6 +58,9 @@ export interface CryptoCapabilities {
   hash: string;
   generateKey: string;
   generateKeyPair: string;
+  deriveKeyPBKDF2: string;
+  deriveKeyHKDF: string;
+  deriveKeyScrypt: string;
 }
 
 /**
@@ -94,6 +90,18 @@ export interface HashResult {
   hash: string;
   algorithm: string;
   input: string;
+  timestamp: Date;
+}
+
+/**
+ * Key derivation result
+ */
+export interface KeyDerivationResult {
+  derivedKey: string;
+  salt: string;
+  algorithm: string;
+  iterations?: number;
+  keyLength: number;
   timestamp: Date;
 }
 
@@ -133,7 +141,9 @@ export class Crypto extends Unit<CryptoProps> {
   // Doctrine #11: ALWAYS HELP (living documentation)
   help(): void {
     console.log(`
-🔐 Crypto Unit [${this.dna.id}] v${this.dna.version} - Foundational Cryptographic Engine
+
+
+Hi, I am Crypto Unit [${this.dna.id}] v${this.dna.version} - Foundational Cryptographic Service
 
 IDENTITY: ${this.whoami()}
 ALGORITHM: ${this.props.algorithm}
@@ -150,11 +160,14 @@ NATIVE CAPABILITIES:
 • sign(data, privateKey) - Digital signatures (Result for complex operation)
 • verify(data, signature, publicKey) - Signature verification (Result for complex operation)
 • randomBytes(size) - Secure random bytes generation (throws on error)
+• deriveKeyPBKDF2(password, salt, iterations?) - PBKDF2 key derivation (throws on error)
+• deriveKeyHKDF(material, salt, info?, length?) - HKDF key derivation (throws on error)  
+• deriveKeyScrypt(password, salt, length?, options?) - Scrypt key derivation (throws on error)
 
 SUPPORTED ALGORITHMS:
 • Symmetric: ${this.props.algorithm}
 • Hash: ${this.props.hashAlgorithm}
-• Asymmetric: RSA, EC (secp256k1, prime256v1)
+• Asymmetric: RSA, EC (prime256v1)
 
 I TEACH:
 • encrypt(data, key) - Symmetric encryption capability
@@ -162,6 +175,9 @@ I TEACH:
 • hash(data) - Cryptographic hashing capability
 • sign(data, privateKey) - Digital signing capability
 • verify(data, signature, publicKey) - Signature verification capability
+• deriveKeyPBKDF2(password, salt, iterations) - PBKDF2 key derivation capability
+• deriveKeyHKDF(material, salt, info, length) - HKDF key derivation capability
+• deriveKeyScrypt(password, salt, length, options) - Scrypt key derivation capability
 
 USAGE EXAMPLES:
   const crypto = Crypto.create();
@@ -171,10 +187,10 @@ USAGE EXAMPLES:
   const hashResult = crypto.hash('data to hash');
   const keyPair = crypto.generateKeyPair();
   
-  // Complex operations (Result pattern)
-  const encrypted = await crypto.encrypt('sensitive data', key);
+  // Complex operations (Result pattern, now synchronous!)
+  const encrypted = crypto.encrypt('sensitive data', key);
   if (encrypted.isSuccess) {
-    const decrypted = await crypto.decrypt(encrypted.value, key);
+    const decrypted = crypto.decrypt(encrypted.value, key);
   }
 
 LEARNING CAPABILITIES:
@@ -204,6 +220,11 @@ ARCHITECTURE: One unit, one goal - cryptographic excellence with zero dependenci
         generateKeyPair: ((...args: unknown[]) => this.generateKeyPair(args[0] as 'rsa' | 'ec', args[1] as number)) as (...args: unknown[]) => unknown,
         randomBytes: ((...args: unknown[]) => this.randomBytes(args[0] as number)) as (...args: unknown[]) => unknown,
         
+        // Key derivation capabilities
+        deriveKeyPBKDF2: ((...args: unknown[]) => this.deriveKeyPBKDF2(args[0] as string, args[1] as string, args[2] as number)) as (...args: unknown[]) => unknown,
+        deriveKeyHKDF: ((...args: unknown[]) => this.deriveKeyHKDF(args[0] as string, args[1] as string, args[2] as string, args[3] as number)) as (...args: unknown[]) => unknown,
+        deriveKeyScrypt: ((...args: unknown[]) => this.deriveKeyScrypt(args[0] as string, args[1] as string, args[2] as number, args[3] as { N?: number; r?: number; p?: number })) as (...args: unknown[]) => unknown,
+        
         // Metadata access
         getAlgorithm: (() => this.props.algorithm) as (...args: unknown[]) => unknown,
         getKeySize: (() => this.props.keySize) as (...args: unknown[]) => unknown,
@@ -219,7 +240,7 @@ ARCHITECTURE: One unit, one goal - cryptographic excellence with zero dependenci
   /**
    * Symmetric encryption using AES (Result - complex multi-step operation)
    */
-  async encrypt(data: string, key: string): Promise<Result<EncryptedData>> {
+  encrypt(data: string, key: string): Result<EncryptedData> {
     try {
       // Doctrine #8: Pure function heart
       const iv = randomBytes(16);
@@ -231,7 +252,7 @@ ARCHITECTURE: One unit, one goal - cryptographic excellence with zero dependenci
       // Handle GCM authentication tag
       let tag: string | undefined;
       if (this.props.algorithm.includes('gcm')) {
-        tag = (cipher as any).getAuthTag().toString('hex');
+        tag = (cipher as unknown as { getAuthTag(): Buffer }).getAuthTag().toString('hex');
       }
       
       return Result.success({
@@ -241,14 +262,14 @@ ARCHITECTURE: One unit, one goal - cryptographic excellence with zero dependenci
         algorithm: this.props.algorithm
       });
     } catch (error) {
-      return Result.fail(`[${this.dna.id}] Encryption failed: ${error instanceof Error ? error.message : String(error)}`);
+      return Result.fail(`[${this.dna.id}] Encryption failed: ${error instanceof Error ? error.message : String(error)}`, error);
     }
   }
 
   /**
    * Symmetric decryption using AES (Result - complex multi-step operation)
    */
-  async decrypt(encrypted: EncryptedData, key: string): Promise<Result<string>> {
+  decrypt(encrypted: EncryptedData, key: string): Result<string> {
     try {
       const decipher = createDecipheriv(
         encrypted.algorithm,
@@ -258,7 +279,7 @@ ARCHITECTURE: One unit, one goal - cryptographic excellence with zero dependenci
       
       // Handle GCM authentication tag
       if (encrypted.tag && encrypted.algorithm.includes('gcm')) {
-        (decipher as any).setAuthTag(Buffer.from(encrypted.tag, 'hex'));
+        (decipher as unknown as { setAuthTag(tag: Buffer): void }).setAuthTag(Buffer.from(encrypted.tag, 'hex'));
       }
       
       let decrypted = decipher.update(encrypted.data, 'hex', 'utf8');
@@ -266,7 +287,7 @@ ARCHITECTURE: One unit, one goal - cryptographic excellence with zero dependenci
       
       return Result.success(decrypted);
     } catch (error) {
-      return Result.fail(`[${this.dna.id}] Decryption failed: ${error instanceof Error ? error.message : String(error)}`);
+      return Result.fail(`[${this.dna.id}] Decryption failed: ${error instanceof Error ? error.message : String(error)}`, error);
     }
   }
 
@@ -289,14 +310,18 @@ ARCHITECTURE: One unit, one goal - cryptographic excellence with zero dependenci
   /**
    * Generate symmetric encryption key (throw on error - simple operation)
    */
-  generateKey(size: number = 32): string {
+  generateKey(size = 32): string {
     return randomBytes(size).toString('hex');
   }
 
   /**
-   * Generate asymmetric key pair (throw on error - simple operation)
+   * Generate asymmetric key pair (throws on error - simple operation)
+   * 
+   * NOTE: For identity use cases, prefer @synet/keys which supports
+   * Ed25519, secp256k1, X25519, WireGuard with format conversion
    */
   generateKeyPair(algorithm: 'rsa' | 'ec' = 'rsa', keySize?: number): KeyPair {
+
     const actualKeySize = keySize || this.props.keySize;
     
     if (algorithm === 'rsa') {
@@ -312,26 +337,28 @@ ARCHITECTURE: One unit, one goal - cryptographic excellence with zero dependenci
         algorithm,
         keySize: actualKeySize
       };
-    } else {
-      const { publicKey, privateKey } = generateKeyPairSync('ec', {
-        namedCurve: 'prime256v1',
-        publicKeyEncoding: { type: 'spki', format: 'pem' },
-        privateKeyEncoding: { type: 'pkcs8', format: 'pem' }
-      });
-      
-      return {
-        publicKey: publicKey as string,
-        privateKey: privateKey as string,
-        algorithm,
-        keySize: 256 // EC keys have fixed sizes based on curve
-      };
     }
+    const { publicKey, privateKey } = generateKeyPairSync('ec', {
+      namedCurve: 'prime256v1',
+      publicKeyEncoding: { type: 'spki', format: 'pem' },
+      privateKeyEncoding: { type: 'pkcs8', format: 'pem' }
+    });
+    
+    return {
+      publicKey: publicKey as string,
+      privateKey: privateKey as string,
+      algorithm,
+      keySize: 256 // EC keys have fixed sizes based on curve
+    };
   }
 
   /**
    * Digital signature creation (Result - complex operation with multiple failure modes)
+   * 
+   * NOTE: For identity/DID use cases, prefer @synet/keys Signer unit which
+   * provides algorithm-specific signing and identity-aware capabilities
    */
-  async sign(data: string, privateKey: string): Promise<Result<string>> {
+  sign(data: string, privateKey: string): Result<string> {
     try {
       const signer = createSign('sha256');
       signer.update(data);
@@ -340,14 +367,17 @@ ARCHITECTURE: One unit, one goal - cryptographic excellence with zero dependenci
       const signature = signer.sign(privateKey, 'hex');
       return Result.success(signature);
     } catch (error) {
-      return Result.fail(`[${this.dna.id}] Signing failed: ${error instanceof Error ? error.message : String(error)}`);
+      return Result.fail(`[${this.dna.id}] Signing failed: ${error instanceof Error ? error.message : String(error)}`, error);
     }
   }
 
   /**
    * Digital signature verification (Result - complex operation with multiple failure modes)
+   * 
+   * NOTE: For identity/DID use cases, prefer @synet/keys Key unit which
+   * provides algorithm-specific verification and can learn from Signers
    */
-  async verify(data: string, signature: string, publicKey: string): Promise<Result<boolean>> {
+  verify(data: string, signature: string, publicKey: string): Result<boolean> {
     try {
       const verifier = createVerify('sha256');
       verifier.update(data);
@@ -356,7 +386,7 @@ ARCHITECTURE: One unit, one goal - cryptographic excellence with zero dependenci
       const isValid = verifier.verify(publicKey, signature, 'hex');
       return Result.success(isValid);
     } catch (error) {
-      return Result.fail(`[${this.dna.id}] Verification failed: ${error instanceof Error ? error.message : String(error)}`);
+      return Result.fail(`[${this.dna.id}] Verification failed: ${error instanceof Error ? error.message : String(error)}`, error);
     }
   }
 
@@ -367,29 +397,95 @@ ARCHITECTURE: One unit, one goal - cryptographic excellence with zero dependenci
     return randomBytes(size).toString('hex');
   }
 
+  /**
+   * PBKDF2 key derivation (throw on error - simple operation)
+   * 
+   * Password-Based Key Derivation Function 2 - industry standard
+   * for deriving encryption keys from passwords with salt and iterations.
+   */
+  deriveKeyPBKDF2(password: string, salt: string, iterations = 100000, keyLength = 32): KeyDerivationResult {
+    const saltBuffer = typeof salt === 'string' ? Buffer.from(salt, 'hex') : Buffer.from(salt);
+    const derivedKey = pbkdf2Sync(password, saltBuffer, iterations, keyLength, 'sha256');
+    
+    return {
+      derivedKey: derivedKey.toString('hex'),
+      salt: saltBuffer.toString('hex'),
+      algorithm: 'pbkdf2',
+      iterations,
+      keyLength,
+      timestamp: new Date()
+    };
+  }
+
+  /**
+   * HKDF key derivation (throw on error - simple operation)
+   * 
+   * HMAC-based Key Derivation Function - RFC 5869 standard
+   * for deriving keys in cryptographic protocols.
+   */
+  deriveKeyHKDF(inputKeyMaterial: string, salt: string, info = '', keyLength = 32): KeyDerivationResult {
+    // Extract phase: HMAC(salt, IKM)
+    const saltBuffer = Buffer.from(salt, 'hex');
+    const ikmBuffer = Buffer.from(inputKeyMaterial, 'hex');
+    const prk = createHmac('sha256', saltBuffer).update(ikmBuffer).digest();
+    
+    // Expand phase: HMAC(PRK, info || counter)
+    const infoBuffer = Buffer.from(info, 'utf8');
+    const t: Buffer[] = [];
+    const hashLength = 32; // SHA-256 output length
+    const n = Math.ceil(keyLength / hashLength);
+    
+    for (let i = 1; i <= n; i++) {
+      const prev = i === 1 ? Buffer.alloc(0) : t[i - 2];
+      const hmac = createHmac('sha256', prk);
+      hmac.update(prev);
+      hmac.update(infoBuffer);
+      hmac.update(Buffer.from([i]));
+      t.push(hmac.digest());
+    }
+    
+    const okm = Buffer.concat(t).subarray(0, keyLength);
+    
+    return {
+      derivedKey: okm.toString('hex'),
+      salt: saltBuffer.toString('hex'),
+      algorithm: 'hkdf-sha256',
+      keyLength,
+      timestamp: new Date()
+    };
+  }
+
+  /**
+   * Scrypt key derivation (throw on error - simple operation)
+   * 
+   * Memory-hard key derivation function designed to be expensive
+   * for attackers using custom hardware.
+   */
+  deriveKeyScrypt(password: string, salt: string, keyLength = 32, options: { N?: number; r?: number; p?: number } = {}): KeyDerivationResult {
+    const { N = 16384, r = 8, p = 1 } = options;
+    const saltBuffer = Buffer.from(salt, 'hex');
+    const derivedKey = scryptSync(password, saltBuffer, keyLength, { N, r, p });
+    
+    return {
+      derivedKey: derivedKey.toString('hex'),
+      salt: saltBuffer.toString('hex'),
+      algorithm: `scrypt-N${N}-r${r}-p${p}`,
+      keyLength,
+      timestamp: new Date()
+    };
+  }
+
   // Doctrine #22: STATELESS OPERATIONS (expose current capabilities)
   capabilities(): string[] {
     return [
       'encrypt', 'decrypt', 'hash', 'sign', 'verify', 
       'generateKey', 'generateKeyPair', 'randomBytes',
+      'deriveKeyPBKDF2', 'deriveKeyHKDF', 'deriveKeyScrypt',
       `algorithm: ${this.props.algorithm}`,
       `keySize: ${this.props.keySize}`,
       `hashAlgorithm: ${this.props.hashAlgorithm}`,
       `operations: ${this.props.operationCount}`
     ];
-  }
-
-  // Doctrine #13: TYPE HIERARCHY CONSISTENCY (domain output)
-  toDomain(): CryptoCapabilities {
-    return {
-      encrypt: 'aes-256-gcm',
-      decrypt: 'aes-256-gcm', 
-      sign: 'rsa-sha256',
-      verify: 'rsa-sha256',
-      hash: this.props.hashAlgorithm,
-      generateKey: 'random-bytes',
-      generateKeyPair: 'rsa'
-    };
   }
 
   // Standard unit identification
