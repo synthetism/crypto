@@ -1,7 +1,7 @@
 {
   "name": "@synet/crypto",
-  "version": "1.0.0",
-  "description": "",
+  "version": "1.0.1",
+  "description": "Foundational cryptographic operations with Unit Architecture",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "private": false,

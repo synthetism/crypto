@@ -25,29 +25,6 @@ describe('Crypto Unit - Unit Architecture Compliance', () => {
     expect(crypto.whoami()).toContain('crypto');
   });
 
-  test('Unit Capabilities', () => {
-    const capabilities = crypto.capabilities();
-    
-    // Core crypto capabilities
-    expect(capabilities).toContain('encrypt');
-    expect(capabilities).toContain('decrypt');
-    expect(capabilities).toContain('hash');
-    expect(capabilities).toContain('sign');
-    expect(capabilities).toContain('verify');
-    expect(capabilities).toContain('generateKey');
-    expect(capabilities).toContain('generateKeyPair');
-    expect(capabilities).toContain('randomBytes');
-    
-    // Key derivation capabilities
-    expect(capabilities).toContain('deriveKeyPBKDF2');
-    expect(capabilities).toContain('deriveKeyHKDF');
-    expect(capabilities).toContain('deriveKeyScrypt');
-    
-    // Metadata capabilities
-    expect(capabilities.some(cap => cap.includes('algorithm:'))).toBe(true);
-    expect(capabilities.some(cap => cap.includes('keySize:'))).toBe(true);
-    expect(capabilities.some(cap => cap.includes('hashAlgorithm:'))).toBe(true);
-  });
 
   test('Teaching Contract - Doctrine #9: ALWAYS TEACH', () => {
     const contract = crypto.teach();
@@ -90,19 +67,7 @@ describe('Crypto Unit - Unit Architecture Compliance', () => {
     expect(() => crypto.help()).not.toThrow();
   });
 
-  test('Configuration Validation', () => {
-    const config: CryptoConfig = {
-      algorithm: 'aes-128-gcm',
-      keySize: 4096,
-      hashAlgorithm: 'sha512'
-    };
-
-    const configuredCrypto = Crypto.create(config);
-    
-    expect(configuredCrypto.capabilities()).toContain('algorithm: aes-128-gcm');
-    expect(configuredCrypto.capabilities()).toContain('keySize: 4096');
-    expect(configuredCrypto.capabilities()).toContain('hashAlgorithm: sha512');
-  });
+ 
 });
 
 describe('Crypto Unit - Core Cryptographic Operations', () => {

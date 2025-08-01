@@ -44,7 +44,6 @@ export interface CryptoProps extends UnitProps {
   algorithm: string;
   keySize: number;
   hashAlgorithm: string;
-  operationCount: number;
 }
 
 /**
@@ -211,32 +210,39 @@ ARCHITECTURE: One unit, one goal - cryptographic excellence with zero dependenci
       unitId: this.dna.id,
       capabilities: {
         // Native cryptographic capabilities only - wrapped for unknown[] compatibility
-        encrypt: ((...args: unknown[]) => this.encrypt(args[0] as string, args[1] as string)) as (...args: unknown[]) => unknown,
-        decrypt: ((...args: unknown[]) => this.decrypt(args[0] as EncryptedData, args[1] as string)) as (...args: unknown[]) => unknown,
-        hash: ((...args: unknown[]) => this.hash(args[0] as string, args[1] as string)) as (...args: unknown[]) => unknown,
-        sign: ((...args: unknown[]) => this.sign(args[0] as string, args[1] as string)) as (...args: unknown[]) => unknown,
-        verify: ((...args: unknown[]) => this.verify(args[0] as string, args[1] as string, args[2] as string)) as (...args: unknown[]) => unknown,
-        generateKey: ((...args: unknown[]) => this.generateKey(args[0] as number)) as (...args: unknown[]) => unknown,
-        generateKeyPair: ((...args: unknown[]) => this.generateKeyPair(args[0] as 'rsa' | 'ec', args[1] as number)) as (...args: unknown[]) => unknown,
-        randomBytes: ((...args: unknown[]) => this.randomBytes(args[0] as number)) as (...args: unknown[]) => unknown,
+        encrypt: (...args: unknown[]) => this.encrypt(args[0] as string, args[1] as string),
+        decrypt: (...args: unknown[]) => this.decrypt(args[0] as EncryptedData, args[1] as string),
+        hash: (...args: unknown[]) => this.hash(args[0] as string, args[1] as string),
+        sign: (...args: unknown[]) => this.sign(args[0] as string, args[1] as string),
+        verify: (...args: unknown[]) => this.verify(args[0] as string, args[1] as string, args[2] as string),
+        generateKey: (...args: unknown[]) => this.generateKey(args[0] as number),
+        generateKeyPair: (...args: unknown[]) => this.generateKeyPair(args[0] as 'rsa' | 'ec', args[1] as number),
+        randomBytes: (...args: unknown[]) => this.randomBytes(args[0] as number),
         
         // Key derivation capabilities
-        deriveKeyPBKDF2: ((...args: unknown[]) => this.deriveKeyPBKDF2(args[0] as string, args[1] as string, args[2] as number)) as (...args: unknown[]) => unknown,
-        deriveKeyHKDF: ((...args: unknown[]) => this.deriveKeyHKDF(args[0] as string, args[1] as string, args[2] as string, args[3] as number)) as (...args: unknown[]) => unknown,
-        deriveKeyScrypt: ((...args: unknown[]) => this.deriveKeyScrypt(args[0] as string, args[1] as string, args[2] as number, args[3] as { N?: number; r?: number; p?: number })) as (...args: unknown[]) => unknown,
+        deriveKeyPBKDF2: (...args: unknown[]) => this.deriveKeyPBKDF2(args[0] as string, args[1] as string, args[2] as number),
+        deriveKeyHKDF: (...args: unknown[]) => this.deriveKeyHKDF(args[0] as string, args[1] as string, args[2] as string, args[3] as number),
+        deriveKeyScrypt: (...args: unknown[]) => this.deriveKeyScrypt(args[0] as string, args[1] as string, args[2] as number, args[3] as { N?: number; r?: number; p?: number }),
         
         // Metadata access
-        getAlgorithm: (() => this.props.algorithm) as (...args: unknown[]) => unknown,
-        getKeySize: (() => this.props.keySize) as (...args: unknown[]) => unknown,
-        getHashAlgorithm: (() => this.props.hashAlgorithm) as (...args: unknown[]) => unknown,
-        getOperationCount: (() => this.props.operationCount) as (...args: unknown[]) => unknown
+        getAlgorithm: () => this.getAlgorithm.bind(this),
+        getKeySize: () => this.getKeySize.bind(this),
+        getHashAlgorithm: () => this.getHashAlgorithm.bind(this),
       }
     };
   }
 
-  // Doctrine #8: PURE FUNCTION HEARTS (core logic as pure functions)
-  // Doctrine #14: ERROR BOUNDARY CLARITY (Result for complex operations, throw for simple ones)
-  
+  getAlgorithm() {
+    return this.props.algorithm;
+  }
+
+  getKeySize() {
+    return this.props.keySize;
+  }
+  getHashAlgorithm() {
+    return this.props.hashAlgorithm;
+  }
+
   /**
    * Symmetric encryption using AES (Result - complex multi-step operation)
    */
@@ -473,19 +479,6 @@ ARCHITECTURE: One unit, one goal - cryptographic excellence with zero dependenci
       keyLength,
       timestamp: new Date()
     };
-  }
-
-  // Doctrine #22: STATELESS OPERATIONS (expose current capabilities)
-  capabilities(): string[] {
-    return [
-      'encrypt', 'decrypt', 'hash', 'sign', 'verify', 
-      'generateKey', 'generateKeyPair', 'randomBytes',
-      'deriveKeyPBKDF2', 'deriveKeyHKDF', 'deriveKeyScrypt',
-      `algorithm: ${this.props.algorithm}`,
-      `keySize: ${this.props.keySize}`,
-      `hashAlgorithm: ${this.props.hashAlgorithm}`,
-      `operations: ${this.props.operationCount}`
-    ];
   }
 
   // Standard unit identification
